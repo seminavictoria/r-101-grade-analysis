@@ -1,0 +1,230 @@
+---
+title: "Grade Analysis by Victoria"
+author: "Viktoriia Semina"
+format: html
+editor: visual
+---
+
+```{r}
+here::i_am("Grade Analysis.Rproj")
+library(here)
+library(vroom)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(knitr)
+library(stringr)
+library(viridisLite)
+```
+
+Question 2
+
+```{r}
+grades<- read.csv("grades.csv")
+
+grade_stats <- grades %>%
+filter(!is.na(Exam)) %>%
+summarise(mingrade = min(Exam),
+          maxgrade = max(Exam),
+          mediangrade = median(Exam),
+          meangrade = mean(Exam))
+
+table_grade_stats <-
+  knitr::kable(grade_stats, caption = "Statistics of grades",col.names = c("min", "max", "median", "mean"))
+
+table_grade_stats
+```
+
+Question 3
+
+```{r}
+exam_not <- grades %>%
+filter(is.na(Exam)) %>%
+nrow()
+
+exam_not
+```
+
+There were \`r exam_not\` students who haven't participated in the exam.
+
+Question 4
+
+```{r}
+exam_grade_dist <- grades %>%
+ggplot(aes(y=Exam), filter(!is.na(Exam))) + geom_histogram(binwidth = 5, fill="pink") + labs( title= "Distribution of exam grades", y="grade", x= "freq") + coord_flip()
+
+exam_grade_dist
+
+```
+
+Question 5
+
+```{r}
+bygr <- grades %>%
+group_by(Group) %>%
+summarise(Number=n()) %>%
+arrange(Number)
+
+knitr::kable(bygr, caption = " Group: number of students")
+
+```
+
+Question 6
+
+```{r}
+bygr_hist <- ggplot(bygr, aes(x= Group, y = Number)) +
+  geom_bar(stat = "identity", fill = "pink") +
+  labs(title = "Number of students in the groups", x= "group", y = "number") +
+  theme_minimal()
+
+bygr_hist
+
+```
+
+Question 7
+
+```{r}
+distbygr <- grades %>%
+ggplot(aes(x= Exam, fill = Group), filter(!is.na(Exam))) + geom_histogram(binwidth = 1, position= "dodge", fill="pink", color= "maroon",) + labs(title = "Grades: distribution by groups", x = "greade", y= "freq") + theme_minimal()
+
+distbygr
+
+```
+
+```{r}
+boxbygr <- grades %>%
+ggplot(aes(x = Group, y= Exam, fill = Group), filter(!is.na(Exam))) + geom_boxplot() + labs(title = "Grades: distribution by groups 2.0", y= "grade") + theme_minimal()
+
+boxbygr
+
+```
+
+Question 8
+
+```{r}
+miss_exam <- grades %>%
+group_by (Group) %>%
+summarise(Number = sum(is.na(Exam))) %>%
+arrange(Number)
+
+knitr::kable(miss_exam, caption = "People who missed the exam")
+
+```
+
+Question 9
+
+```{r}
+miss_exam_hist <- ggplot(miss_exam, aes(x= Group, y= Number)) + geom_col(fill = "pink", color ="maroon") + labs(title = "People who missed the exam", x = "group", y = "number") +theme_minimal()
+
+miss_exam_hist
+
+```
+
+Question 10
+
+```{r}
+grades_long <- grades %>%
+pivot_longer(cols = c(matches("MCQ"), Exam),
+             names_to = "name",
+             values_to = "value")
+
+```
+
+Question 11
+
+```{r}
+miss_grades_student <- grades_long %>%
+  group_by(Id) %>%
+  summarise(Miss_Grades =sum(is.na(value)))
+
+miss_grades_student
+```
+
+Question 12
+
+```{r}
+ggplot(miss_grades_student, aes(x=`Miss_Grades`)) + geom_bar()+ geom_histogram(binwidth = 1, fill = "pink", color = "maroon") +
+  labs(title = "Missing grades: distribution", x = "Count for missed grades", y= "freq") + theme_minimal()
+
+```
+
+Question 13
+
+```{r}
+library(stringr)
+```
+
+```{r}
+miss_exam_2 <- grades_long %>%
+  filter(str_starts(name, "Exam"))%>%
+  group_by(Group)%>%
+  summarise('Missing grades (Exam)'=sum(is.na(value)))
+```
+
+Question 14
+
+```{r}
+missing_grades_online <- grades_long %>%
+  filter(str_starts(name, "Online")) %>%
+  group_by(Id) %>%
+  summarise('Number of missed grades for online tests'=sum(is.na(value)))
+
+missing_grades_online
+```
+
+Question 15
+
+```{r}
+online_missed <- grades %>%
+  select(Id, starts_with("Online_MCQ")) %>%
+  rowwise() %>%
+  mutate(miss_online_gr = sum(is.na(c_across(everything())))) %>%
+  select(Id, miss_online_gr)
+
+online_missed <- grades %>%
+  left_join(online_missed, by = "Id")
+
+online_missed_plot <- online_missed %>% ggplot(aes(x = miss_online_gr, y= Exam)) + geom_smooth() + labs(title = "Exam grade vs missed online tests", x= "missing online tests", y= "grade of the exam") +theme_minimal()
+
+online_missed_plot
+```
+
+Question 16
+
+```{r}
+MCQ_missed <- grades_long %>%
+  filter(str_starts(name, "MCQ_")) %>%
+  group_by(Id)  %>%
+  summarise('Missed'=if_else(sum(is.na(value))==0, FALSE, TRUE))
+  
+  
+MCQ_missed 
+```
+
+Question 17
+
+```{r}
+MCQ_missed_gr <- grades_long %>%
+  filter(str_starts(name, "MCQ_")) %>%
+  group_by(Group, Id)%>%
+  mutate('Missed at least 1 MCQ'=if_else(sum(is.na(value))==0,0,1)) %>%
+  group_by(Group) %>%
+  summarise('P_missed'=sum(`Missed at least 1 MCQ`)/n()*100)
+  
+MCQ_missed_gr
+```
+
+Question 18
+
+```{r}
+avg_gr_group <- grades %>%
+  group_by(Group) %>%
+  summarise(avg_gr = mean(Exam, na.rm = TRUE))
+
+final_graph <- MCQ_missed_gr %>%
+  inner_join(avg_gr_group, by = "Group") %>%
+  ggplot(aes(x = P_missed, y= avg_gr)) + geom_point() + geom_smooth(method = "lm", se = FALSE, color = "maroon") + labs(title = "The dependence of the final exam grade on missed online tests", x = "Missed MCQ grades (in %)", y = "Average exam grade") + theme_minimal()
+
+final_graph
+
+```
